@@ -1,5 +1,6 @@
 /*
-    A C 
+    A simple server
+    Thanks to http://beej.us/guide/bgnet/output/html/multipage/index.html
 */
 
 #include <stdio.h>
