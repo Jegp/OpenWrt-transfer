@@ -1,21 +1,59 @@
+                                 
 /*
     A simple server
     Thanks to http://beej.us/guide/bgnet/output/html/multipage/index.html
 */
 
+#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-//#include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
+
+int write_file(char * filename, int connection_fd) {
+    char buffer[100];
+    int filefd, bytes_read, bytes_written;
+
+    // Open outputfile
+    if ((filefd = open(filename, O_CREAT | O_WRONLY)) < 0) {
+        fprintf(stderr, "Failed to create file '%s'\n", filename);
+        return -1;
+    }
+        
+    while (1) {
+        bytes_read = recv(connection_fd, buffer, sizeof(buffer), 0);
+        if (bytes_read == 0) break;
+        if (bytes_read < 0) {
+            perror("Failure when receiving data");
+            return -1;
+        }
+        
+        void * p = buffer;
+        while (bytes_read > 0) {
+            bytes_written = write(filefd, p, bytes_read);
+            if (bytes_written < 0) {
+                fprintf(stderr, "Failed to write to file '%s'", filename);
+                return -1;
+            }
+            bytes_read -= bytes_written;
+            p += bytes_written;
+        }
+    }
+
+    // Success
+    return 0;
+}
 
 int main(void) {
     int socketfd, status, new_fd;
     struct addrinfo hints, *servinfo, *current;
     struct sockaddr_storage remote_addr;
-    char ipstr[INET6_ADDRSTRLEN];
+    struct timeval tv;
+    char ipstr[INET6_ADDRSTRLEN], filename[100];
     socklen_t remote_addr_size;
+    double timestamp;
+    pid_t childId;
 
     // Init address
     memset(&hints, 0, sizeof hints);
@@ -56,11 +94,17 @@ int main(void) {
             exit(1);
         }
         
-        
+        // Print success
         inet_ntop(current->ai_family, address, ipstr, sizeof ipstr);
         printf("Starting server at %s...\n", ipstr);
 
         break;
+    }
+
+    // Check to see if the connection could be made
+    if (current == NULL) {
+        fprintf(stderr, "Server: Failed to bind\n");
+        return -1;
     }
     
     // Free memory
@@ -82,15 +126,21 @@ int main(void) {
         inet_ntop(remote_addr.ss_family,
             &((struct sockaddr_in *)&remote_addr)->sin_addr,
             s, sizeof s);
-        printf("server: got connection from %s\n", s);
-        char buf[100];
-        int rec;
-        if ((rec = recv(new_fd, buf, 99, 0)) == -1) {
-            perror("Server: Failure when receiving message");
-            continue;
+        
+        gettimeofday(&tv, NULL);
+        timestamp = (tv.tv_sec) * 1000 + (tv.tv_usec) / 1000;
+    
+        printf("Got connection from %s at %.0f\n", s, timestamp);
+        
+        snprintf(filename, sizeof(filename), "%s_%.0f", s, timestamp);        
+        
+        if (write_file(filename, new_fd) != 0) {
+            fprintf(stderr, "Error, shutting down\n");
+            break;
         }
-        buf[rec] = '\0';
-        printf("Received: '%s' with length %d\n", buf, rec);
+    
+        printf("Successfully wrote file '%s'\n", filename);
+
         close (new_fd);
     }
     close(socketfd);

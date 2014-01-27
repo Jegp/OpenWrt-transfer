@@ -6,16 +6,62 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-//#include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
+#include <unistd.h>
+#include <fcntl.h>
 
-int main(void) {
+int sendFile(char * file, int socketfd) {
+    int filefd, bytes_read, bytes_written;
+    char buffer[100];
+
+    if ((filefd = open(file, O_RDONLY)) < 0) {
+        fprintf(stderr, "Could not open file '%s'\n", file);
+        return -1;
+    }
+    
+    // Read the file into a buffer
+    while (1) {
+        bytes_read = read(filefd, buffer, sizeof(buffer));
+        if (bytes_read == 0) break;
+        if (bytes_read < 0) {
+            fprintf(stderr, "Failed to read from file\n");
+            return -1;
+        }
+        
+        void * p = buffer;
+        while (bytes_read > 0) {
+            bytes_written = write(socketfd, p, bytes_read);
+            if (bytes_written < 0) {
+                fprintf(stderr, "Failed to write to server\n");
+                return -1;
+            }
+            bytes_read -= bytes_written;
+            p += bytes_written;
+        }
+    }
+
+    // Close the open file
+    close(filefd);
+    
+    return 0;
+}
+
+int main(int argc, char * args[]) {
     int socketfd, status;
     struct addrinfo hints, *servinfo, *current;
     struct sockaddr_storage remote_addr;
     char ipstr[INET6_ADDRSTRLEN];
     socklen_t remote_addr_size;
+
+    // Init params
+    if (argc != 3) {
+        printf("Usage: client server-address filename");
+        exit(1);
+    }
+    char * server   = args[1];
+    char * filename = args[2];
+    printf("Sending '%s' to server at '%s'\n", filename, server);
 
     // Init address
     memset(&hints, 0, sizeof hints);
@@ -24,7 +70,7 @@ int main(void) {
     hints.ai_flags = AI_PASSIVE;
 
     // Check for correct initialization of address
-    if ((status = getaddrinfo(NULL, "3490", &hints, &servinfo)) != 0) {
+    if ((status = getaddrinfo(server, "3490", &hints, &servinfo)) != 0) {
         fprintf(stderr, "Server error at getaddrinfo: %s\n", gai_strerror(status));
         exit(1);
     }
@@ -51,23 +97,29 @@ int main(void) {
         
         if (connect(socketfd, current->ai_addr, current->ai_addrlen) == -1) {
             close(socketfd);
-            perror("Client: Failed to connect to server");
             continue;
         }
     
         break;
     }
 
+    // Check for error when connecting
+    if (current == NULL)  {
+        fprintf(stderr, "Client: Failed to bind\n");
+        return 2;
+    }
+    
     // Free memory
     freeaddrinfo(servinfo);
+    
+    // Send the file
+    if (sendFile(filename, socketfd) != 0) {
+        fprintf(stderr, "Client: Error while sending file\n");
+        return -1;
+    }
 
-    char *msg = "Beej was here!";
-    int len, bytes_sent;
-    len = strlen(msg);
-    bytes_sent = send(socketfd, msg, len, 0);
-    printf("Sent %d bytes out of len 14", bytes_sent, len);
+    // Close the socket
     close(socketfd);
-        
 
     // Success
     return 0;
