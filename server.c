@@ -16,7 +16,7 @@ int write_file(char * filename, int connection_fd) {
     int filefd, bytes_read, bytes_written;
 
     // Open outputfile
-    if ((filefd = open(filename, O_CREAT | O_WRONLY)) < 0) {
+    if ((filefd = open(filename, O_CREAT | O_WRONLY, 0644)) < 0) {
         fprintf(stderr, "Failed to create file '%s'\n", filename);
         return -1;
     }
@@ -45,7 +45,7 @@ int write_file(char * filename, int connection_fd) {
     return 0;
 }
 
-int main(void) {
+int main(int argc, char * args[]) {
     int socketfd, status, new_fd;
     struct addrinfo hints, *servinfo, *current;
     struct sockaddr_storage remote_addr;
@@ -54,6 +54,25 @@ int main(void) {
     socklen_t remote_addr_size;
     double timestamp;
     pid_t childId;
+    char * address_prefix;
+
+    if (argc == 2) {
+        struct stat file_status;
+        address_prefix = args[1];
+        if (stat(address_prefix, &file_status) == 0) {
+            if (!(file_status.st_mode & S_IFDIR)) {
+                fprintf(stderr, "Failure: Prefix '%s' must be a directory\n", address_prefix);
+                return -1;
+            }
+        } else {
+            fprintf(stderr, "Failure: Prefix '%s' could not be found\n", address_prefix);
+            return -1;
+        }
+    } else if (argc > 2) {
+        printf("Usage: server [path-prefix]\n");
+    } else {
+        address_prefix = "";
+    }
 
     // Init address
     memset(&hints, 0, sizeof hints);
@@ -132,7 +151,7 @@ int main(void) {
     
         printf("Got connection from %s at %.0f\n", s, timestamp);
         
-        snprintf(filename, sizeof(filename), "%s_%.0f", s, timestamp);        
+        snprintf(filename, sizeof(filename), "%s/%s_%.0f", address_prefix, s, timestamp);        
         
         if (write_file(filename, new_fd) != 0) {
             fprintf(stderr, "Error, shutting down\n");
