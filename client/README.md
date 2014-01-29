@@ -10,7 +10,8 @@ I am currently on ```Attitude Adjustment``` v. 12.09 with an ar71xx device, foun
 To compile, simply download and unpack the SDK, make a symbolic link
 to this client folder under the SDK ```package``` dir 
 (so the path to the client is: `path-to-SDK/package/client`), go to
-the root of the SDK and hit `make`.
+the root of the SDK and hit `make`. The package will be available at the `bin/ar71xx/packages/` directory as an
+`.ipk` file which can be installed by the package manager on the OpenWrt device.
 
 If something fails please refer to this brilliant tutorial on how
 to compile programs for OpenWrt: 
