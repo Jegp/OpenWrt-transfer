@@ -1,2 +1,4 @@
+client/src/client
 server/server
 dump
+*.o

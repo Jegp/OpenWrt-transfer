@@ -71,7 +71,7 @@ int main(int argc, char * args[]) {
     } else if (argc > 2) {
         printf("Usage: server [path-prefix]\n");
     } else {
-        address_prefix = "";
+        address_prefix = ".";
     }
 
     // Init address

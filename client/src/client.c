@@ -11,9 +11,26 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+#define BUFFER_SIZE 1000
+
+int write_to_socket(int socketfd, void * buffer, int bytes_read) {
+    int bytes_written;
+    while (bytes_read > 0) {
+        bytes_written = write(socketfd, buffer, bytes_read);
+        if (bytes_written < 0) {
+            fprintf(stderr, "Failed to write to server\n");
+            return -1;
+        }
+        bytes_read -= bytes_written;
+        buffer += bytes_written;
+    }
+
+    return 0;
+}
+
 int sendFile(char * file, int socketfd) {
-    int filefd, bytes_read, bytes_written;
-    char buffer[100];
+    int filefd, bytes_read;
+    char buffer[BUFFER_SIZE];
 
     if ((filefd = open(file, O_RDONLY)) < 0) {
         fprintf(stderr, "Could not open file '%s'\n", file);
@@ -29,15 +46,8 @@ int sendFile(char * file, int socketfd) {
             return -1;
         }
         
-        void * p = buffer;
-        while (bytes_read > 0) {
-            bytes_written = write(socketfd, p, bytes_read);
-            if (bytes_written < 0) {
-                fprintf(stderr, "Failed to write to server\n");
-                return -1;
-            }
-            bytes_read -= bytes_written;
-            p += bytes_written;
+        if (write_to_socket(socketfd, (void *) buffer, bytes_read) != 0) {
+            return -1;
         }
     }
 
@@ -47,6 +57,27 @@ int sendFile(char * file, int socketfd) {
     return 0;
 }
 
+int send_std_in(int socketfd) {
+    int bytes_read;
+    char * line = NULL;
+    size_t size;
+    
+    // Loop forever
+    while (1) {
+        if ((bytes_read = getline(&line, &size, stdin)) == -1) {
+            printf("Input ended\n");
+            return 0;
+        }
+
+        if (write_to_socket(socketfd, (void *) line, bytes_read) != 0) {
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+
 int main(int argc, char * args[]) {
     int socketfd, status;
     struct addrinfo hints, *servinfo, *current;
@@ -55,13 +86,14 @@ int main(int argc, char * args[]) {
     socklen_t remote_addr_size;
 
     // Init params
-    if (argc != 3) {
-        printf("Usage: client server-address filename");
+    if (argc != 2 && argc != 3) {
+        printf("Usage: client server-address [filename]\n");
         exit(1);
     }
     char * server   = args[1];
     char * filename = args[2];
-    printf("Sending '%s' to server at '%s'\n", filename, server);
+    printf("Sending %s to server at '%s'\n", 
+        (filename == NULL) ? "" : filename, server);
 
     // Init address
     memset(&hints, 0, sizeof hints);
@@ -112,8 +144,12 @@ int main(int argc, char * args[]) {
     // Free memory
     freeaddrinfo(servinfo);
     
-    // Send the file
-    if (sendFile(filename, socketfd) != 0) {
+    // Send the input
+    if (filename == NULL) {
+      if (send_std_in(socketfd) != 0) {
+        fprintf(stderr, "Client: Error while sending data\n");
+      }
+    } else if (sendFile(filename, socketfd) != 0) {
         fprintf(stderr, "Client: Error while sending file\n");
         return -1;
     }
