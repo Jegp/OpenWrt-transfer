@@ -11,8 +11,6 @@
 #include <unistd.h>
 #include <fcntl.h>
 
-#define BUFFER_SIZE 1000
-
 int write_to_socket(int socketfd, void * buffer, int bytes_read) {
     int bytes_written;
     while (bytes_read > 0) {
@@ -30,7 +28,7 @@ int write_to_socket(int socketfd, void * buffer, int bytes_read) {
 
 int sendFile(char * file, int socketfd) {
     int filefd, bytes_read;
-    char buffer[BUFFER_SIZE];
+    char buffer[1000];
 
     if ((filefd = open(file, O_RDONLY)) < 0) {
         fprintf(stderr, "Could not open file '%s'\n", file);
